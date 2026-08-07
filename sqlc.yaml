@@ -1,0 +1,19 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/domain/repository/rag/rag.sql"
+    schema: "internal/domain/repository/db_schema/db.schema.sql"
+    gen:
+      go:
+        package: "rag_repository"
+        out: "internal/domain/repository/rag"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "varchar"
+            go_type: "string"
+          - db_type: "text"
+            go_type: "string"
+          - db_type: "json"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"

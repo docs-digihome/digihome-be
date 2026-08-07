@@ -1,0 +1,52 @@
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  { id = "check-yaml" },
+  { id = "end-of-file-fixer" },
+  { id = "trailing-whitespace"},
+  { id = "detect-private-key"},
+]
+
+# Custom hooks defined in local repository
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "go-fmt",
+    name = "gofmt",
+    language = "system",
+    entry = "gofmt -w",
+    files = "\\.go$",
+    stages = ['pre-commit']
+  },
+
+  {
+    id = "go-vet",
+    name = "go vet",
+    language = "system",
+    entry = "go vet ./...",
+    pass_filenames = false,
+    files = "\\.go$",
+    stages = ['pre-commit']
+  },
+
+  {
+    id = "go-lint",
+    name = "golangci-lint",
+    language = "system",
+    entry = "golangci-lint run",
+    pass_filenames = false,
+    files = "\\.go$",
+    stages = ['pre-commit']
+  },
+  {
+    id = "go-staticcheck",
+    name = "staticcheck",
+    language = "system",
+    entry = "staticcheck ./...",
+    pass_filenames = false,
+    files = "\\.go$",
+    stages = ['pre-push']
+  },
+]

@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    container_name: rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - backend_db_data:/var/lib/postgresql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend_storage:
+    image: rustfs/rustfs:1.0.0-beta.11
+    container_name: backend_storage
+    environment:
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_EXTERNAL_ADDRESS=:9000 # Same as internal since no port mapping
+      - RUSTFS_CORS_ALLOWED_ORIGINS=*
+      - RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS=*
+      - RUSTFS_ACCESS_KEY=${OS_ROOT_USER}
+      - RUSTFS_SECRET_KEY=${OS_ROOT_PASSWORD}
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - backend_rustfs_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -f http://localhost:9000/health && curl -f http://localhost:9001/rustfs/console/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  backend_db_data: {}
+  backend_rustfs_data: {}
