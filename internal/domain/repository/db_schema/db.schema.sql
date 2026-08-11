@@ -1,6 +1,6 @@
 CREATE TABLE document_chunks (
   id UUID PRIMARY KEY DEFAULT uuidv7(),
-  page_number INTEGER,
+  document_name VARCHAR NOT NULL,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
   embedding vector(1024),
