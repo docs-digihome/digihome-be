@@ -10,10 +10,10 @@ import (
 )
 
 type DocumentChunk struct {
-	ID         pgtype.UUID
-	PageNumber pgtype.Int4
-	ChunkIndex int32
-	Content    string
-	Embedding  pgvector.Vector
-	CreatedAt  pgtype.Timestamptz
+	ID           pgtype.UUID
+	DocumentName string
+	ChunkIndex   int32
+	Content      string
+	Embedding    pgvector.Vector
+	CreatedAt    pgtype.Timestamptz
 }

@@ -12,10 +12,58 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+const getRegisteredDocuments = `-- name: GetRegisteredDocuments :many
+SELECT
+  DISTINCT document_name
+FROM document_chunks
+`
+
+func (q *Queries) GetRegisteredDocuments(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, getRegisteredDocuments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var document_name string
+		if err := rows.Scan(&document_name); err != nil {
+			return nil, err
+		}
+		items = append(items, document_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertDocumentChunks = `-- name: InsertDocumentChunks :exec
+INSERT INTO document_chunks (document_name, chunk_index, content, embedding)
+VALUES ($1,$2,$3,$4)
+`
+
+type InsertDocumentChunksParams struct {
+	DocumentName string
+	ChunkIndex   int32
+	Content      string
+	Embedding    pgvector.Vector
+}
+
+func (q *Queries) InsertDocumentChunks(ctx context.Context, arg InsertDocumentChunksParams) error {
+	_, err := q.db.Exec(ctx, insertDocumentChunks,
+		arg.DocumentName,
+		arg.ChunkIndex,
+		arg.Content,
+		arg.Embedding,
+	)
+	return err
+}
+
 const searchDocumentChunks = `-- name: SearchDocumentChunks :many
 SELECT
     id,
-    page_number,
+    document_name,
     chunk_index,
     content,
     created_at,
@@ -31,12 +79,12 @@ type SearchDocumentChunksParams struct {
 }
 
 type SearchDocumentChunksRow struct {
-	ID         pgtype.UUID
-	PageNumber pgtype.Int4
-	ChunkIndex int32
-	Content    string
-	CreatedAt  pgtype.Timestamptz
-	Similarity int32
+	ID           pgtype.UUID
+	DocumentName string
+	ChunkIndex   int32
+	Content      string
+	CreatedAt    pgtype.Timestamptz
+	Similarity   int32
 }
 
 func (q *Queries) SearchDocumentChunks(ctx context.Context, arg SearchDocumentChunksParams) ([]SearchDocumentChunksRow, error) {
@@ -50,7 +98,7 @@ func (q *Queries) SearchDocumentChunks(ctx context.Context, arg SearchDocumentCh
 		var i SearchDocumentChunksRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.PageNumber,
+			&i.DocumentName,
 			&i.ChunkIndex,
 			&i.Content,
 			&i.CreatedAt,
