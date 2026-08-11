@@ -18,6 +18,7 @@ type (
 		Get(ctx context.Context, bucketName, objectPath string) (io.ReadCloser, error)
 		Delete(ctx context.Context, bucketName, objectPath string) error
 		CreateBucketIfNotExist(ctx context.Context, bucketName string) error
+		ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
 		SetPolicy(ctx context.Context, bucketName, policy string) error
 		GetPolicy(ctx context.Context, bucketName string) (string, error)
 	}
@@ -32,6 +33,15 @@ func NewRustfsInfra(client *minio.Client, logger *slog.Logger) RustfsInfra {
 		client: client,
 		logger: logger,
 	}
+}
+
+// listObjects implements [RustfsInfra].
+func (r *rustfsInfra) ListObjects(
+	ctx context.Context,
+	bucketName string,
+	opts minio.ListObjectsOptions,
+) <-chan minio.ObjectInfo {
+	return r.client.ListObjects(ctx, bucketName, opts)
 }
 
 // InitBucket implements [RustfsInfra].
