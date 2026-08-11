@@ -49,6 +49,40 @@ services:
       retries: 3
       start_period: 40s
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "sleep 10 && ollama pull bge-m3 && ollama pull gemma3:1b "
+      ]
+
 volumes:
+  ollama_data: {}
   backend_db_data: {}
   backend_rustfs_data: {}
