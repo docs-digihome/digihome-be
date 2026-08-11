@@ -1,1 +1,1 @@
-DROP TABLE IF EXIST document_chunks;
+DROP TABLE IF EXISTS document_chunks;
