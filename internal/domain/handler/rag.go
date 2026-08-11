@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/daffadon/digihome/internal/domain/services"
+	"github.com/daffadon/digihome/internal/pkg"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -31,5 +32,9 @@ func RegisterRagRoute(r chi.Router, rh RagHandler) {
 
 // Seed implements [RagHandler].
 func (rh *ragHandler) Seed(w http.ResponseWriter, r *http.Request) {
-	rh.rs.Seed()
+	ctx := r.Context()
+	if err := rh.rs.Seed(ctx); err != nil {
+		pkg.ReturnError(w, http.StatusInternalServerError, err)
+	}
+	pkg.ReturnSuccess(w, http.StatusCreated, "seed success", nil)
 }
