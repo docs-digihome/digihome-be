@@ -8,11 +8,13 @@ import (
 	"github.com/daffadon/digihome/config/env"
 	"github.com/daffadon/digihome/config/logger"
 	"github.com/daffadon/digihome/config/router"
-	"github.com/daffadon/digihome/config/s3"
+	s3_config "github.com/daffadon/digihome/config/s3"
 	"github.com/daffadon/digihome/internal/domain/handler"
 	rag_repository "github.com/daffadon/digihome/internal/domain/repository/rag"
+	s3_repository "github.com/daffadon/digihome/internal/domain/repository/s3"
 	"github.com/daffadon/digihome/internal/domain/services"
 	s3_infra "github.com/daffadon/digihome/internal/infra/s3"
+	"github.com/daffadon/digihome/internal/pkg"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
@@ -25,10 +27,13 @@ func main() {
 		}),
 		fx.Provide(
 			logger.NewSlogLogger,
-			s3.NewRustfsConnection,
+			pkg.NewMarkdownNormalizer,
+			pkg.NewMarkdownChunker,
+			s3_config.NewRustfsConnection,
 			s3_infra.NewRustfsInfra,
 			db.NewPostgresqlConn,
 			rag_repository.NewRAGQueries,
+			s3_repository.NewS3Repository,
 			services.NewRagService,
 			handler.NewRootHandler,
 			handler.NewRagHandler,
