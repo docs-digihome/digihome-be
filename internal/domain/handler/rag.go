@@ -35,6 +35,7 @@ func (rh *ragHandler) Seed(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := rh.rs.Seed(ctx); err != nil {
 		pkg.ReturnError(w, http.StatusInternalServerError, err)
+		return
 	}
 	pkg.ReturnSuccess(w, http.StatusCreated, "seed success", nil)
 }
