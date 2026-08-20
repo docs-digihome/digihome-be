@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE document_chunks (
+CREATE TABLE IF NOT EXISTS document_chunks (
   id UUID PRIMARY KEY DEFAULT uuidv7(),
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
