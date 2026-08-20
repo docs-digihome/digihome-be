@@ -13,6 +13,7 @@ type (
 	S3Repository interface {
 		CopyObjectToFile(ctx context.Context, bucketName, objectPath, destDir, fileName string) (string, error)
 		ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
+		Set(ctx context.Context, bucketName, objectPath string, reader io.Reader, objectSize int64) error
 	}
 	s3Repository struct {
 		rfi s3_infra.RustfsInfra
@@ -23,6 +24,11 @@ func NewS3Repository(rfi s3_infra.RustfsInfra) S3Repository {
 	return &s3Repository{
 		rfi: rfi,
 	}
+}
+
+// Set implements [S3Repository].
+func (s *s3Repository) Set(ctx context.Context, bucketName string, objectPath string, reader io.Reader, objectSize int64) error {
+	return s.rfi.Set(ctx, bucketName, objectPath, reader, objectSize)
 }
 
 // ListObjects implements [S3Repository].
