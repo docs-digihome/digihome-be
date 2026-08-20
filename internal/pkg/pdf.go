@@ -1,11 +1,26 @@
 package pkg
 
 import (
+	"bytes"
+	"io"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+func IsPDF(fileName string, reader io.Reader) (bool, error) {
+	if !strings.EqualFold(filepath.Ext(fileName), ".pdf") {
+		return false, nil
+	}
+	buf := make([]byte, 1024)
+	n, err := reader.Read(buf)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	return bytes.Contains(buf[:n], []byte("%PDF-")), nil
+}
 
 func InspectPDF(path string) ([]byte, error) {
 	cmd := exec.Command(
