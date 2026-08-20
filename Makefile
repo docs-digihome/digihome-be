@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: run docker-build
+.PHONY: run docker-build migrate-create
 
 # run app with go run command
 run:
@@ -15,6 +15,10 @@ dev-start:
 	@docker compose up -d
 
 # migrations
+
+# create new migration file, usage: make migrate-create name=<migration_name>
+migrate-create:
+	@migrate create -ext sql -dir migrations -seq $(name)
 
 migrate-up:
 	@migrate -path migrations/ -database "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}?sslmode=disable" -verbose up
