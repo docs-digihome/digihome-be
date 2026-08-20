@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"mime/multipart"
 	"os"
 	"runtime"
 	"slices"
@@ -13,14 +15,18 @@ import (
 	s3_repository "github.com/daffadon/digihome/internal/domain/repository/s3"
 	"github.com/daffadon/digihome/internal/pkg"
 	"github.com/daffadon/digihome/internal/schema"
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/pgvector/pgvector-go"
 )
+
+var ErrNoValidPDF = errors.New("no valid pdf files")
 
 type (
 	RagService interface {
 		Seed(ctx context.Context) error
 		DataPopulation(ctx context.Context, localPath, objectKey string) error
+		BatchInsertDocument(ctx context.Context, files []*multipart.FileHeader) ([]schema.BatchInsertDocumentResponse, error)
 	}
 	ragService struct {
 		slog       *slog.Logger
@@ -68,7 +74,7 @@ func (r *ragService) Seed(ctx context.Context) error {
 	pdfTempDir := "./temp/pdf-processing"
 	objects := r.sr.ListObjects(
 		ctx,
-		"documents",
+		constant.APP_BUCKET,
 		minio.ListObjectsOptions{
 			Recursive: true,
 		},
@@ -83,7 +89,7 @@ func (r *ragService) Seed(ctx context.Context) error {
 			)
 			continue
 		}
-		pdfPath, err := r.sr.CopyObjectToFile(ctx, "documents", object.Key, pdfTempDir, "*.pdf")
+		pdfPath, err := r.sr.CopyObjectToFile(ctx, constant.APP_BUCKET, object.Key, pdfTempDir, "*.pdf")
 		if err != nil {
 			r.slog.Error("copy file failed",
 				"error", err,
@@ -97,6 +103,100 @@ func (r *ragService) Seed(ctx context.Context) error {
 	close(pdfJobs)
 	wg.Wait()
 	return nil
+}
+
+// BatchInsertDocument implements [RagService].
+func (r *ragService) BatchInsertDocument(ctx context.Context, files []*multipart.FileHeader) ([]schema.BatchInsertDocumentResponse, error) {
+	workers := 4
+	fileJobs := make(chan *multipart.FileHeader, len(files))
+	results := make(chan schema.BatchInsertDocumentResponse, len(files))
+	var wg sync.WaitGroup
+
+	for range workers {
+		wg.Go(func() {
+			for file := range fileJobs {
+				results <- r.insertDocument(ctx, file)
+			}
+		})
+	}
+
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		fileJobs <- file
+	}
+	close(fileJobs)
+	wg.Wait()
+	close(results)
+
+	responses := make([]schema.BatchInsertDocumentResponse, 0, len(files))
+	for resp := range results {
+		responses = append(responses, resp)
+	}
+
+	for _, resp := range responses {
+		if resp.Error == "" {
+			return responses, nil
+		}
+	}
+	return responses, ErrNoValidPDF
+}
+
+func (r *ragService) insertDocument(ctx context.Context, file *multipart.FileHeader) schema.BatchInsertDocumentResponse {
+	f, err := file.Open()
+	if err != nil {
+		r.slog.Error("open multipart file failed",
+			"error", err,
+			"name", file.Filename,
+		)
+		return schema.BatchInsertDocumentResponse{
+			OriginalName: file.Filename,
+			Error:        "failed to open file",
+		}
+	}
+
+	isPdf, err := pkg.IsPDF(file.Filename, f)
+	if err != nil {
+		f.Close()
+		r.slog.Error("pdf detection failed",
+			"error", err,
+			"name", file.Filename,
+		)
+		return schema.BatchInsertDocumentResponse{
+			OriginalName: file.Filename,
+			Error:        "failed to inspect file",
+		}
+	}
+	if !isPdf {
+		f.Close()
+		r.slog.Warn("rejected non-pdf file",
+			"name", file.Filename,
+		)
+		return schema.BatchInsertDocumentResponse{
+			OriginalName: file.Filename,
+			Error:        "not a pdf file",
+		}
+	}
+
+	objectKey := uuid.NewString() + "_" + file.Filename
+	if err := r.sr.Set(ctx, constant.APP_BUCKET, objectKey, f, file.Size); err != nil {
+		f.Close()
+		r.slog.Error("set object failed",
+			"error", err,
+			"object-key", objectKey,
+		)
+		return schema.BatchInsertDocumentResponse{
+			ObjectKey:    objectKey,
+			OriginalName: file.Filename,
+			Error:        err.Error(),
+		}
+	}
+	f.Close()
+	return schema.BatchInsertDocumentResponse{
+		ObjectKey:    objectKey,
+		OriginalName: file.Filename,
+	}
 }
 
 // DataPopulation implements [RagService].
