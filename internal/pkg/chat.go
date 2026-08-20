@@ -17,8 +17,10 @@ type OllamaChatRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	Stream   bool          `json:"stream"`
+	Think    bool          `json:"think"`
 	Options  struct {
-		NumCtx int `json:"num_ctx"`
+		NumCtx     int `json:"num_ctx"`
+		NumPredict int `json:"num_predict"`
 	} `json:"options"`
 }
 
@@ -27,13 +29,14 @@ type OllamaChatResponse struct {
 	Done    bool        `json:"done"`
 }
 
-func Chat(ctx context.Context, endpoint, model string, messages []ChatMessage, numCtx int) (string, error) {
+func Chat(ctx context.Context, endpoint, model string, messages []ChatMessage, numCtx, maxTokens int) (string, error) {
 	reqBody := OllamaChatRequest{
 		Model:    model,
 		Messages: messages,
 		Stream:   false,
 	}
 	reqBody.Options.NumCtx = numCtx
+	reqBody.Options.NumPredict = maxTokens
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
