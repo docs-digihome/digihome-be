@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package rag_repository
+package chat_repository
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"

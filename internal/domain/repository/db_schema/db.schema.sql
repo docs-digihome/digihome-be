@@ -6,3 +6,11 @@ CREATE TABLE document_chunks (
   embedding vector(1024),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS messages(
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  embedding vector(1024),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

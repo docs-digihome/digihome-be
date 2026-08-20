@@ -13,7 +13,17 @@ sql:
             go_type: "string"
           - db_type: "text"
             go_type: "string"
-          - db_type: "json"
-            go_type: "encoding/json.RawMessage"
-          - db_type: "jsonb"
-            go_type: "encoding/json.RawMessage"
+
+  - engine: "postgresql"
+    queries: "internal/domain/repository/chat/chat.sql"
+    schema: "internal/domain/repository/db_schema/db.schema.sql"
+    gen:
+      go:
+        package: "chat_repository"
+        out: "internal/domain/repository/chat"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "varchar"
+            go_type: "string"
+          - db_type: "text"
+            go_type: "string"
