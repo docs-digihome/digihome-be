@@ -15,3 +15,9 @@ type (
 		CreatedAt time.Time `json:"create_at"`
 	}
 )
+type (
+	ChatResponse struct {
+		Reply     string   `json:"reply"`
+		Documents []string `json:"documents,omitempty"`
+	}
+)
