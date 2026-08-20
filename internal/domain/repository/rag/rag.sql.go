@@ -67,7 +67,7 @@ SELECT
     chunk_index,
     content,
     created_at,
-    1 - (embedding <=> $1) AS similarity
+    (1 - (embedding <=> $1))::float8 AS similarity
 FROM document_chunks
 ORDER BY embedding <=> $1
 LIMIT $2
@@ -84,7 +84,7 @@ type SearchDocumentChunksRow struct {
 	ChunkIndex   int32
 	Content      string
 	CreatedAt    pgtype.Timestamptz
-	Similarity   int32
+	Similarity   float64
 }
 
 func (q *Queries) SearchDocumentChunks(ctx context.Context, arg SearchDocumentChunksParams) ([]SearchDocumentChunksRow, error) {
