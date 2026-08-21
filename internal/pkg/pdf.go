@@ -10,13 +10,16 @@ import (
 	"strings"
 )
 
-func IsPDF(fileName string, reader io.Reader) (bool, error) {
+func IsPDF(fileName string, reader io.ReadSeeker) (bool, error) {
 	if !strings.EqualFold(filepath.Ext(fileName), ".pdf") {
 		return false, nil
 	}
 	buf := make([]byte, 1024)
 	n, err := reader.Read(buf)
 	if err != nil && err != io.EOF {
+		return false, err
+	}
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
 		return false, err
 	}
 	return bytes.Contains(buf[:n], []byte("%PDF-")), nil
