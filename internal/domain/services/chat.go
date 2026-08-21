@@ -28,7 +28,7 @@ const (
 type (
 	ChatService interface {
 		Chat(ctx context.Context, text string) (schema.ChatResponse, error)
-		GetLatestChart(ctx context.Context, beforeTime time.Time) ([]schema.MessageResponse, error)
+		GetLatestChat(ctx context.Context, beforeTime time.Time) ([]schema.MessageResponse, error)
 	}
 	chatService struct {
 		slog *slog.Logger
@@ -115,19 +115,28 @@ func (c *chatService) Chat(ctx context.Context, text string) (schema.ChatRespons
 		)
 		return schema.ChatResponse{Reply: reply, Documents: documentSources(docChunks)}, nil
 	}
-	if err := c.rr.CreateNewMessage(ctx, chat_repository.CreateNewMessageParams{
+	msgID, err := c.rr.CreateNewMessageReturningID(ctx, chat_repository.CreateNewMessageReturningIDParams{
 		Role:      roleAssistant,
 		Content:   reply,
 		Embedding: pgvector.NewVector(replyEmbedding),
-	}); err != nil {
+	})
+	if err != nil {
 		return schema.ChatResponse{}, err
+	}
+	for _, chunk := range docChunks {
+		if err := c.rr.InsertMessageDocumentChunk(ctx, chat_repository.InsertMessageDocumentChunkParams{
+			MessageID: msgID,
+			ChunkID:   chunk.ID,
+		}); err != nil {
+			c.slog.Warn("insert message_document_chunk failed", "error", err, "message_id", msgID, "chunk_id", chunk.ID)
+		}
 	}
 
 	return schema.ChatResponse{Reply: reply, Documents: documentSources(docChunks)}, nil
 }
 
-// GetLatestChart implements [ChatService].
-func (c *chatService) GetLatestChart(ctx context.Context, beforeTime time.Time) ([]schema.MessageResponse, error) {
+// GetLatestChat implements [ChatService].
+func (c *chatService) GetLatestChat(ctx context.Context, beforeTime time.Time) ([]schema.MessageResponse, error) {
 	const limit = 20
 
 	if beforeTime.IsZero() {
@@ -135,7 +144,12 @@ func (c *chatService) GetLatestChart(ctx context.Context, beforeTime time.Time) 
 		if err != nil {
 			return nil, err
 		}
-		return mapLatestMessages(rows), nil
+		msgs := mapLatestMessages(rows)
+		ids := make([]int32, len(rows))
+		for i, r := range rows {
+			ids[i] = r.ID
+		}
+		return c.hydrateDocumentsByIDs(ctx, msgs, ids)
 	}
 
 	rows, err := c.rr.GetMessagesBefore(ctx, chat_repository.GetMessagesBeforeParams{
@@ -145,7 +159,27 @@ func (c *chatService) GetLatestChart(ctx context.Context, beforeTime time.Time) 
 	if err != nil {
 		return nil, err
 	}
-	return mapMessagesBefore(rows), nil
+	msgs := mapMessagesBefore(rows)
+	ids := make([]int32, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	return c.hydrateDocumentsByIDs(ctx, msgs, ids)
+}
+
+func (c *chatService) hydrateDocumentsByIDs(ctx context.Context, msgs []schema.MessageResponse, ids []int32) ([]schema.MessageResponse, error) {
+	for i, msg := range msgs {
+		if msg.Role != roleAssistant {
+			continue
+		}
+		names, err := c.rr.GetDocumentNamesByMessageID(ctx, ids[i])
+		if err != nil {
+			c.slog.Warn("get document names failed", "error", err, "message_id", ids[i])
+			continue
+		}
+		msgs[i].Documents = names
+	}
+	return msgs, nil
 }
 
 // chatConfigFromViper reads the llm.chat settings from the app config.
