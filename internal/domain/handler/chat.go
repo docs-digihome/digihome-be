@@ -61,8 +61,9 @@ func (c *chatHandler) GetLatestChatWithPagination(w http.ResponseWriter, r *http
 			dateTime = parsed
 		}
 	}
-	resp, err := c.cs.GetLatestChart(ctx, dateTime)
+	resp, err := c.cs.GetLatestChat(ctx, dateTime)
 	if err != nil {
+		c.slog.Error("error endpoint", "err", err)
 		pkg.ReturnError(w, http.StatusInternalServerError, err)
 		return
 	}

@@ -28,29 +28,32 @@ func NewRagHandler(slog *slog.Logger, rs services.RagService) RagHandler {
 	}
 }
 
+func RegisterRagRoute(r chi.Router, rh RagHandler) {
+	r.Post("/rag/seed", rh.Seed)
+	r.Post("/rag/document", rh.BatchInsertDocument)
+}
+
 // BatchInsertDocument implements [RagHandler].
 func (rh *ragHandler) BatchInsertDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		rh.slog.Error("batch insert error", "error", err)
 		pkg.ReturnError(w, http.StatusBadRequest, err)
 		return
 	}
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
+		rh.slog.Error("batch insert error", "error", "files is empty")
 		pkg.ReturnError(w, http.StatusBadRequest, errors.New("no files uploaded"))
 		return
 	}
 	resp, err := rh.rs.BatchInsertDocument(ctx, files)
 	if err != nil {
-		pkg.ReturnError(w, http.StatusBadRequest, err)
+		rh.slog.Error("batch insert error", "error", err)
+		pkg.ReturnError(w, http.StatusInternalServerError, err)
 		return
 	}
 	pkg.ReturnSuccess(w, http.StatusOK, "batch insert success", resp)
-}
-
-func RegisterRagRoute(r chi.Router, rh RagHandler) {
-	r.Post("/rag/seed", rh.Seed)
-	r.Post("/rag/document", rh.BatchInsertDocument)
 }
 
 // Seed implements [RagHandler].
