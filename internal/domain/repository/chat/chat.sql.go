@@ -28,17 +28,70 @@ func (q *Queries) CreateNewMessage(ctx context.Context, arg CreateNewMessagePara
 	return err
 }
 
+const createNewMessageReturningID = `-- name: CreateNewMessageReturningID :one
+INSERT INTO messages (role,content,embedding)
+VALUES ($1,$2,$3)
+RETURNING id
+`
+
+type CreateNewMessageReturningIDParams struct {
+	Role      string
+	Content   string
+	Embedding pgvector.Vector
+}
+
+func (q *Queries) CreateNewMessageReturningID(ctx context.Context, arg CreateNewMessageReturningIDParams) (int32, error) {
+	row := q.db.QueryRow(ctx, createNewMessageReturningID, arg.Role, arg.Content, arg.Embedding)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getDocumentNamesByMessageID = `-- name: GetDocumentNamesByMessageID :many
+SELECT dc.document_name
+FROM message_document_chunks mdc
+JOIN document_chunks dc ON dc.id = mdc.chunk_id
+WHERE mdc.message_id = $1
+ORDER BY dc.document_name ASC
+`
+
+func (q *Queries) GetDocumentNamesByMessageID(ctx context.Context, messageID int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, getDocumentNamesByMessageID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var document_name string
+		if err := rows.Scan(&document_name); err != nil {
+			return nil, err
+		}
+		items = append(items, document_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestMessages = `-- name: GetLatestMessages :many
-SELECT
-  role,
-  content,
-  created_at
-FROM messages
-ORDER BY created_at DESC
-LIMIT $1
+SELECT id, role, content, created_at
+FROM (
+  SELECT
+    id,
+    role,
+    content,
+    created_at
+  FROM messages
+  ORDER BY created_at DESC
+  LIMIT $1
+) AS latest
+ORDER BY created_at ASC
 `
 
 type GetLatestMessagesRow struct {
+	ID        int32
 	Role      string
 	Content   string
 	CreatedAt pgtype.Timestamptz
@@ -53,7 +106,12 @@ func (q *Queries) GetLatestMessages(ctx context.Context, limit int32) ([]GetLate
 	var items []GetLatestMessagesRow
 	for rows.Next() {
 		var i GetLatestMessagesRow
-		if err := rows.Scan(&i.Role, &i.Content, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -65,14 +123,19 @@ func (q *Queries) GetLatestMessages(ctx context.Context, limit int32) ([]GetLate
 }
 
 const getMessagesBefore = `-- name: GetMessagesBefore :many
-SELECT 
-  role, 
-  content,
-  created_at
-FROM messages
-WHERE created_at < $1
-ORDER BY id DESC
-LIMIT $2
+SELECT id, role, content, created_at
+FROM (
+  SELECT
+    id,
+    role,
+    content,
+    created_at
+  FROM messages
+  WHERE created_at < $1
+  ORDER BY created_at DESC
+  LIMIT $2
+) AS messages_page
+ORDER BY created_at ASC
 `
 
 type GetMessagesBeforeParams struct {
@@ -81,6 +144,7 @@ type GetMessagesBeforeParams struct {
 }
 
 type GetMessagesBeforeRow struct {
+	ID        int32
 	Role      string
 	Content   string
 	CreatedAt pgtype.Timestamptz
@@ -95,7 +159,12 @@ func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforePa
 	var items []GetMessagesBeforeRow
 	for rows.Next() {
 		var i GetMessagesBeforeRow
-		if err := rows.Scan(&i.Role, &i.Content, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -104,6 +173,22 @@ func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforePa
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertMessageDocumentChunk = `-- name: InsertMessageDocumentChunk :exec
+INSERT INTO message_document_chunks (message_id, chunk_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type InsertMessageDocumentChunkParams struct {
+	MessageID int32
+	ChunkID   pgtype.UUID
+}
+
+func (q *Queries) InsertMessageDocumentChunk(ctx context.Context, arg InsertMessageDocumentChunkParams) error {
+	_, err := q.db.Exec(ctx, insertMessageDocumentChunk, arg.MessageID, arg.ChunkID)
+	return err
 }
 
 const searchSimilarMessages = `-- name: SearchSimilarMessages :many

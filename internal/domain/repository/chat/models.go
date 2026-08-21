@@ -25,3 +25,8 @@ type Message struct {
 	Embedding pgvector.Vector
 	CreatedAt pgtype.Timestamptz
 }
+
+type MessageDocumentChunk struct {
+	MessageID int32
+	ChunkID   pgtype.UUID
+}
