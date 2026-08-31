@@ -38,3 +38,6 @@ gin-bin
 .env*
 
 tmp
+
+# config file
+config*
