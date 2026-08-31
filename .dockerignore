@@ -39,5 +39,7 @@ gin-bin
 
 tmp
 
-# config file
-config*
+# config file (yaml configs only, not the config package)
+config*.yaml
+config*.yml
+config.yaml.example
