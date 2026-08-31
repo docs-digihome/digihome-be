@@ -27,6 +27,7 @@ type (
 		Seed(ctx context.Context) error
 		DataPopulation(ctx context.Context, localPath, objectKey string) error
 		BatchInsertDocument(ctx context.Context, files []*multipart.FileHeader) ([]schema.BatchInsertDocumentResponse, error)
+		GetDocuments(ctx context.Context) (schema.GetSeededUniqueDocumentName, error)
 	}
 	ragService struct {
 		slog       *slog.Logger
@@ -199,10 +200,24 @@ func (r *ragService) insertDocument(ctx context.Context, file *multipart.FileHea
 	}
 }
 
+// GetDocuments implements [RagService].
+func (r *ragService) GetDocuments(ctx context.Context) (schema.GetSeededUniqueDocumentName, error) {
+	docs, err := r.rr.GetRegisteredDocuments(ctx)
+	if err != nil {
+		return schema.GetSeededUniqueDocumentName{}, err
+	}
+	if docs == nil {
+		return schema.GetSeededUniqueDocumentName{}, nil
+	}
+	return schema.GetSeededUniqueDocumentName{
+		DocumentName: docs,
+	}, nil
+}
+
 // DataPopulation implements [RagService].
 func (r *ragService) DataPopulation(ctx context.Context, localPath, objectKey string) error {
 	defer os.Remove(localPath)
-	result, err := pkg.InspectPDF(localPath)
+	result, err := pkg.InspectPDFContext(ctx, localPath)
 	if err != nil {
 		r.slog.Error("pdf inspect failed",
 			"error", err,

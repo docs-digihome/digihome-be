@@ -14,6 +14,7 @@ type (
 	RagHandler interface {
 		Seed(w http.ResponseWriter, r *http.Request)
 		BatchInsertDocument(w http.ResponseWriter, r *http.Request)
+		GetDocuments(w http.ResponseWriter, r *http.Request)
 	}
 	ragHandler struct {
 		slog *slog.Logger
@@ -31,6 +32,7 @@ func NewRagHandler(slog *slog.Logger, rs services.RagService) RagHandler {
 func RegisterRagRoute(r chi.Router, rh RagHandler) {
 	r.Post("/rag/seed", rh.Seed)
 	r.Post("/rag/document", rh.BatchInsertDocument)
+	r.Get("/rag/documents", rh.GetDocuments)
 }
 
 // BatchInsertDocument implements [RagHandler].
@@ -54,6 +56,18 @@ func (rh *ragHandler) BatchInsertDocument(w http.ResponseWriter, r *http.Request
 		return
 	}
 	pkg.ReturnSuccess(w, http.StatusOK, "batch insert success", resp)
+}
+
+// GetDocuments implements [RagHandler].
+func (rh *ragHandler) GetDocuments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	docs, err := rh.rs.GetDocuments(ctx)
+	if err != nil {
+		rh.slog.Error("get documents error", "error", err)
+		pkg.ReturnError(w, http.StatusInternalServerError, err)
+		return
+	}
+	pkg.ReturnSuccess(w, http.StatusOK, "get documents success", docs)
 }
 
 // Seed implements [RagHandler].

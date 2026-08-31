@@ -13,4 +13,7 @@ type (
 		OriginalName string `json:"original_name"`
 		Error        string `json:"error,omitempty"`
 	}
+	GetSeededUniqueDocumentName struct {
+		DocumentName []string `json:"document_name"`
+	}
 )
