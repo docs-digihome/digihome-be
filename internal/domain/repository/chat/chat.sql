@@ -52,7 +52,7 @@ VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: GetDocumentNamesByMessageID :many
-SELECT dc.document_name
+SELECT dc.document_name, dc.link
 FROM message_document_chunks mdc
 JOIN document_chunks dc ON dc.id = mdc.chunk_id
 WHERE mdc.message_id = $1

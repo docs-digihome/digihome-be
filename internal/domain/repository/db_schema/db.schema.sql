@@ -4,6 +4,7 @@ CREATE TABLE document_chunks (
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
   embedding vector(1024),
+  link VARCHAR NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

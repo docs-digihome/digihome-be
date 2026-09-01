@@ -1,12 +1,14 @@
 -- name: GetRegisteredDocuments :many
-SELECT
-  DISTINCT document_name
+SELECT DISTINCT ON (document_name)
+    document_name,
+    link
 FROM document_chunks;
 
 -- name: SearchDocumentChunks :many
 SELECT
     id,
     document_name,
+    link,
     chunk_index,
     content,
     created_at,
@@ -16,5 +18,5 @@ ORDER BY embedding <=> $1
 LIMIT $2;
 
 -- name: InsertDocumentChunks :exec
-INSERT INTO document_chunks (document_name, chunk_index, content, embedding)
-VALUES ($1,$2,$3,$4);
+INSERT INTO document_chunks (document_name, chunk_index, content, embedding,link)
+VALUES ($1,$2,$3,$4,$5);
