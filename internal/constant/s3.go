@@ -1,7 +1,7 @@
 package constant
 
 const (
-	APP_BUCKET        = "documents"
+	DOCUMENT_BUCKET        = "documents"
 	PUBLIC_PERMISSION = `{
   "Version": "2012-10-17",
   "Statement": [

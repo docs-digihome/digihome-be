@@ -15,7 +15,7 @@ import (
 
 func RunHTTPServer(lc fx.Lifecycle, r chi.Router, slog *slog.Logger, s s3_infra.RustfsInfra) *http.Server {
 	srv := &http.Server{Addr: ":" + viper.GetString("app.http.port"), Handler: r}
-	err := s.InitBucket(context.Background(), constant.APP_BUCKET)
+	err := s.InitBucket(context.Background(), constant.DOCUMENT_BUCKET)
 	if err != nil {
 		slog.Error("Failed to init bucket", "error", err)
 	}

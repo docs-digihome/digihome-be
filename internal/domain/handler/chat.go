@@ -39,11 +39,13 @@ func (c *chatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req, sc, err, ok := pkg.DecodeAndValidateBody[schema.ChatRequest](w, r, c.slog)
 	if !ok {
+		c.slog.Error("get chat error", "error", err)
 		pkg.ReturnError(w, sc, err)
 		return
 	}
 	resp, err := c.cs.Chat(ctx, req.TextPrompt)
 	if err != nil {
+		c.slog.Error("get chat error", "error", err)
 		pkg.ReturnError(w, http.StatusInternalServerError, err)
 		return
 	}
