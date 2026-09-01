@@ -13,24 +13,30 @@ import (
 )
 
 const getRegisteredDocuments = `-- name: GetRegisteredDocuments :many
-SELECT
-  DISTINCT document_name
+SELECT DISTINCT ON (document_name)
+    document_name,
+    link
 FROM document_chunks
 `
 
-func (q *Queries) GetRegisteredDocuments(ctx context.Context) ([]string, error) {
+type GetRegisteredDocumentsRow struct {
+	DocumentName string
+	Link         string
+}
+
+func (q *Queries) GetRegisteredDocuments(ctx context.Context) ([]GetRegisteredDocumentsRow, error) {
 	rows, err := q.db.Query(ctx, getRegisteredDocuments)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetRegisteredDocumentsRow
 	for rows.Next() {
-		var document_name string
-		if err := rows.Scan(&document_name); err != nil {
+		var i GetRegisteredDocumentsRow
+		if err := rows.Scan(&i.DocumentName, &i.Link); err != nil {
 			return nil, err
 		}
-		items = append(items, document_name)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -39,8 +45,8 @@ func (q *Queries) GetRegisteredDocuments(ctx context.Context) ([]string, error) 
 }
 
 const insertDocumentChunks = `-- name: InsertDocumentChunks :exec
-INSERT INTO document_chunks (document_name, chunk_index, content, embedding)
-VALUES ($1,$2,$3,$4)
+INSERT INTO document_chunks (document_name, chunk_index, content, embedding,link)
+VALUES ($1,$2,$3,$4,$5)
 `
 
 type InsertDocumentChunksParams struct {
@@ -48,6 +54,7 @@ type InsertDocumentChunksParams struct {
 	ChunkIndex   int32
 	Content      string
 	Embedding    pgvector.Vector
+	Link         string
 }
 
 func (q *Queries) InsertDocumentChunks(ctx context.Context, arg InsertDocumentChunksParams) error {
@@ -56,6 +63,7 @@ func (q *Queries) InsertDocumentChunks(ctx context.Context, arg InsertDocumentCh
 		arg.ChunkIndex,
 		arg.Content,
 		arg.Embedding,
+		arg.Link,
 	)
 	return err
 }
@@ -64,6 +72,7 @@ const searchDocumentChunks = `-- name: SearchDocumentChunks :many
 SELECT
     id,
     document_name,
+    link,
     chunk_index,
     content,
     created_at,
@@ -81,6 +90,7 @@ type SearchDocumentChunksParams struct {
 type SearchDocumentChunksRow struct {
 	ID           pgtype.UUID
 	DocumentName string
+	Link         string
 	ChunkIndex   int32
 	Content      string
 	CreatedAt    pgtype.Timestamptz
@@ -99,6 +109,7 @@ func (q *Queries) SearchDocumentChunks(ctx context.Context, arg SearchDocumentCh
 		if err := rows.Scan(
 			&i.ID,
 			&i.DocumentName,
+			&i.Link,
 			&i.ChunkIndex,
 			&i.Content,
 			&i.CreatedAt,

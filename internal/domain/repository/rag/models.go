@@ -15,6 +15,7 @@ type DocumentChunk struct {
 	ChunkIndex   int32
 	Content      string
 	Embedding    pgvector.Vector
+	Link         string
 	CreatedAt    pgtype.Timestamptz
 }
 

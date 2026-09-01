@@ -48,26 +48,31 @@ func (q *Queries) CreateNewMessageReturningID(ctx context.Context, arg CreateNew
 }
 
 const getDocumentNamesByMessageID = `-- name: GetDocumentNamesByMessageID :many
-SELECT dc.document_name
+SELECT dc.document_name, dc.link
 FROM message_document_chunks mdc
 JOIN document_chunks dc ON dc.id = mdc.chunk_id
 WHERE mdc.message_id = $1
 ORDER BY dc.document_name ASC
 `
 
-func (q *Queries) GetDocumentNamesByMessageID(ctx context.Context, messageID int32) ([]string, error) {
+type GetDocumentNamesByMessageIDRow struct {
+	DocumentName string
+	Link         string
+}
+
+func (q *Queries) GetDocumentNamesByMessageID(ctx context.Context, messageID int32) ([]GetDocumentNamesByMessageIDRow, error) {
 	rows, err := q.db.Query(ctx, getDocumentNamesByMessageID, messageID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetDocumentNamesByMessageIDRow
 	for rows.Next() {
-		var document_name string
-		if err := rows.Scan(&document_name); err != nil {
+		var i GetDocumentNamesByMessageIDRow
+		if err := rows.Scan(&i.DocumentName, &i.Link); err != nil {
 			return nil, err
 		}
-		items = append(items, document_name)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
