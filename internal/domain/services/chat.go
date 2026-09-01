@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daffadon/digihome/internal/constant"
 	chat_repository "github.com/daffadon/digihome/internal/domain/repository/chat"
 	rag_repository "github.com/daffadon/digihome/internal/domain/repository/rag"
 	"github.com/daffadon/digihome/internal/pkg"
@@ -60,7 +59,7 @@ func NewChatService(slog *slog.Logger, rr *chat_repository.Queries, rgrr *rag_re
 func (c *chatService) Chat(ctx context.Context, text string) (schema.ChatResponse, error) {
 	cfg := chatConfigFromViper()
 
-	promptEmbedding, err := pkg.Embed(ctx, constant.DEFAULT_EMBED_MODEL, text)
+	promptEmbedding, err := pkg.Embed(ctx, pkg.EmbedModel(), text)
 	if err != nil {
 		return schema.ChatResponse{}, err
 	}
@@ -108,7 +107,7 @@ func (c *chatService) Chat(ctx context.Context, text string) (schema.ChatRespons
 		return schema.ChatResponse{Reply: reply, Documents: documentSources(docChunks)}, nil
 	}
 
-	replyEmbedding, err := pkg.Embed(ctx, constant.DEFAULT_EMBED_MODEL, reply)
+	replyEmbedding, err := pkg.Embed(ctx, pkg.EmbedModel(), reply)
 	if err != nil {
 		c.slog.Warn("embedding assistant reply failed, reply not persisted",
 			"error", err,
@@ -172,12 +171,24 @@ func (c *chatService) hydrateDocumentsByIDs(ctx context.Context, msgs []schema.M
 		if msg.Role != roleAssistant {
 			continue
 		}
-		names, err := c.rr.GetDocumentNamesByMessageID(ctx, ids[i])
+		rows, err := c.rr.GetDocumentNamesByMessageID(ctx, ids[i])
 		if err != nil {
 			c.slog.Warn("get document names failed", "error", err, "message_id", ids[i])
 			continue
 		}
-		msgs[i].Documents = names
+		if len(rows) == 0 {
+			continue
+		}
+		seen := make(map[string]struct{}, len(rows))
+		docs := make([]schema.ChatDocument, 0, len(rows))
+		for _, r := range rows {
+			if _, ok := seen[r.DocumentName]; ok {
+				continue
+			}
+			seen[r.DocumentName] = struct{}{}
+			docs = append(docs, schema.ChatDocument{Name: r.DocumentName, Link: r.Link})
+		}
+		msgs[i].Documents = docs
 	}
 	return msgs, nil
 }
@@ -306,16 +317,16 @@ func buildDocumentContext(documents []rag_repository.SearchDocumentChunksRow, av
 	return "Relevant document excerpts:\n" + b.String()
 }
 
-// documentSources returns the unique document names used as context.
-func documentSources(documents []rag_repository.SearchDocumentChunksRow) []string {
+// documentSources returns the unique documents used as context, with name and link.
+func documentSources(documents []rag_repository.SearchDocumentChunksRow) []schema.ChatDocument {
 	seen := make(map[string]struct{}, len(documents))
-	sources := make([]string, 0, len(documents))
+	sources := make([]schema.ChatDocument, 0, len(documents))
 	for _, chunk := range documents {
 		if _, ok := seen[chunk.DocumentName]; ok {
 			continue
 		}
 		seen[chunk.DocumentName] = struct{}{}
-		sources = append(sources, chunk.DocumentName)
+		sources = append(sources, schema.ChatDocument{Name: chunk.DocumentName, Link: chunk.Link})
 	}
 	return sources
 }

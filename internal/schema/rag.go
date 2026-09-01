@@ -14,6 +14,7 @@ type (
 		Error        string `json:"error,omitempty"`
 	}
 	GetSeededUniqueDocumentName struct {
-		DocumentName []string `json:"document_name"`
+		DocumentName string `json:"document_name"`
+		DocumentLink string `json:"link"`
 	}
 )

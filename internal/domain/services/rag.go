@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"mime/multipart"
 	"os"
@@ -27,7 +28,7 @@ type (
 		Seed(ctx context.Context) error
 		DataPopulation(ctx context.Context, localPath, objectKey string) error
 		BatchInsertDocument(ctx context.Context, files []*multipart.FileHeader) ([]schema.BatchInsertDocumentResponse, error)
-		GetDocuments(ctx context.Context) (schema.GetSeededUniqueDocumentName, error)
+		GetDocuments(ctx context.Context) ([]schema.GetSeededUniqueDocumentName, error)
 	}
 	ragService struct {
 		slog       *slog.Logger
@@ -58,6 +59,10 @@ func (r *ragService) Seed(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	registeredDocumentsList := make([]string, len(registedDocuments))
+	for _, val := range registedDocuments {
+		registeredDocumentsList = append(registeredDocumentsList, val.DocumentName)
+	}
 
 	for range workers {
 		wg.Go(func() {
@@ -75,13 +80,13 @@ func (r *ragService) Seed(ctx context.Context) error {
 	pdfTempDir := "./temp/pdf-processing"
 	objects := r.sr.ListObjects(
 		ctx,
-		constant.APP_BUCKET,
+		constant.DOCUMENT_BUCKET,
 		minio.ListObjectsOptions{
 			Recursive: true,
 		},
 	)
 	for object := range objects {
-		if slices.Contains(registedDocuments, object.Key) {
+		if slices.Contains(registeredDocumentsList, object.Key) {
 			continue
 		}
 		if object.Err != nil {
@@ -90,7 +95,7 @@ func (r *ragService) Seed(ctx context.Context) error {
 			)
 			continue
 		}
-		pdfPath, err := r.sr.CopyObjectToFile(ctx, constant.APP_BUCKET, object.Key, pdfTempDir, "*.pdf")
+		pdfPath, err := r.sr.CopyObjectToFile(ctx, constant.DOCUMENT_BUCKET, object.Key, pdfTempDir, "*.pdf")
 		if err != nil {
 			r.slog.Error("copy file failed",
 				"error", err,
@@ -181,7 +186,7 @@ func (r *ragService) insertDocument(ctx context.Context, file *multipart.FileHea
 	}
 
 	objectKey := uuid.NewString() + "_" + file.Filename
-	if err := r.sr.Set(ctx, constant.APP_BUCKET, objectKey, f, file.Size); err != nil {
+	if err := r.sr.Set(ctx, constant.DOCUMENT_BUCKET, objectKey, f, file.Size); err != nil {
 		f.Close()
 		r.slog.Error("set object failed",
 			"error", err,
@@ -201,17 +206,23 @@ func (r *ragService) insertDocument(ctx context.Context, file *multipart.FileHea
 }
 
 // GetDocuments implements [RagService].
-func (r *ragService) GetDocuments(ctx context.Context) (schema.GetSeededUniqueDocumentName, error) {
+func (r *ragService) GetDocuments(ctx context.Context) ([]schema.GetSeededUniqueDocumentName, error) {
 	docs, err := r.rr.GetRegisteredDocuments(ctx)
 	if err != nil {
-		return schema.GetSeededUniqueDocumentName{}, err
+		return nil, err
 	}
 	if docs == nil {
-		return schema.GetSeededUniqueDocumentName{}, nil
+		return nil, nil
 	}
-	return schema.GetSeededUniqueDocumentName{
-		DocumentName: docs,
-	}, nil
+	res := make([]schema.GetSeededUniqueDocumentName, len(docs))
+	for _, val := range docs {
+		res = append(res, schema.GetSeededUniqueDocumentName{
+			DocumentName: val.DocumentName,
+			DocumentLink: val.Link,
+		})
+	}
+	fmt.Println(res)
+	return res, nil
 }
 
 // DataPopulation implements [RagService].
@@ -231,7 +242,7 @@ func (r *ragService) DataPopulation(ctx context.Context, localPath, objectKey st
 		if chunk.Content == "" {
 			continue
 		}
-		embedding, err := pkg.Embed(ctx, constant.DEFAULT_EMBED_MODEL, chunk.Content)
+		embedding, err := pkg.Embed(ctx, pkg.EmbedModel(), chunk.Content)
 		if err != nil {
 			r.slog.Error("embedding process error",
 				"error", err,
@@ -246,6 +257,7 @@ func (r *ragService) DataPopulation(ctx context.Context, localPath, objectKey st
 			ChunkIndex:   int32(chunk.Index),
 			Content:      chunk.Content,
 			Embedding:    vector,
+			Link:         constant.DOCUMENT_BUCKET + "/" + objectKey,
 		}); err != nil {
 			r.slog.Error("insert chunk error",
 				"error", err,
