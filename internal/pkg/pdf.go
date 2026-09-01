@@ -39,10 +39,11 @@ type PdfClass struct {
 	Kind       string
 	Pages      int
 	Confidence float64
+	NeedOCR    int // -1 if not present (e.g. Digital), otherwise pages needing OCR from "Mixed" output
 }
 
 var pdfInfoRegex = regexp.MustCompile(
-	`(?i)^([A-Za-z]+)\s+\((\d+)\s+pages?,\s+confidence:\s+([0-9.]+)\)$`,
+	`(?i)^([A-Za-z]+)\s+\((\d+)\s+pages?,\s+confidence:\s+([0-9.]+)(?:,\s*(\d+)\s+pages?\s+need\s+OCR)?\)$`,
 )
 
 func ClassifyPDF(ctx context.Context, path string) (PdfClass, error) {
@@ -57,7 +58,7 @@ func ClassifyPDF(ctx context.Context, path string) (PdfClass, error) {
 	}
 	result := strings.TrimSpace(string(output))
 	matches := pdfInfoRegex.FindStringSubmatch(result)
-	if len(matches) != 4 {
+	if len(matches) == 0 {
 		return PdfClass{}, fmt.Errorf("unparsable detect output: %q", result)
 	}
 	pages, err := strconv.Atoi(matches[2])
@@ -68,10 +69,17 @@ func ClassifyPDF(ctx context.Context, path string) (PdfClass, error) {
 	if err != nil {
 		return PdfClass{}, fmt.Errorf("invalid confidence %q: %w", matches[3], err)
 	}
+	needOCR := -1
+	if len(matches) >= 5 && matches[4] != "" {
+		if n, err := strconv.Atoi(matches[4]); err == nil {
+			needOCR = n
+		}
+	}
 	return PdfClass{
 		Kind:       matches[1],
 		Pages:      pages,
 		Confidence: confidence,
+		NeedOCR:    needOCR,
 	}, nil
 }
 
@@ -151,10 +159,21 @@ func InspectPDFContext(ctx context.Context, path string) ([]byte, error) {
 		// fallback to OCR on classification failure (safer than failing ingest)
 		ocrPath, ocrErr := ocrPDF(ctx, path)
 		if ocrErr != nil {
+			// OCR can fail on corrupt embedded images (e.g. "Not a JPEG file: starts with 0x48 0x89");
+			// degrade gracefully to direct inspect so text-based pages are still ingested.
+			if out, directErr := inspectDirect(ctx, path); directErr == nil {
+				return out, nil
+			}
 			return nil, fmt.Errorf("classify failed (%v) and ocr fallback failed: %w", err, ocrErr)
 		}
 		defer os.Remove(ocrPath)
-		return inspectDirect(ctx, ocrPath)
+		if out, directErr := inspectDirect(ctx, ocrPath); directErr == nil {
+			return out, nil
+		} else if out2, fallbackErr := inspectDirect(ctx, path); fallbackErr == nil {
+			return out2, nil
+		} else {
+			return nil, directErr
+		}
 	}
 
 	if isDocumentBased(class) {
@@ -163,10 +182,20 @@ func InspectPDFContext(ctx context.Context, path string) ([]byte, error) {
 
 	ocrPath, err := ocrPDF(ctx, path)
 	if err != nil {
+		// Mixed / scanned PDFs where OCR fails should still ingest via direct inspect
+		if out, directErr := inspectDirect(ctx, path); directErr == nil {
+			return out, nil
+		}
 		return nil, err
 	}
 	defer os.Remove(ocrPath)
-	return inspectDirect(ctx, ocrPath)
+	if out, directErr := inspectDirect(ctx, ocrPath); directErr == nil {
+		return out, nil
+	} else if out2, fallbackErr := inspectDirect(ctx, path); fallbackErr == nil {
+		return out2, nil
+	} else {
+		return nil, directErr
+	}
 }
 
 func InspectPDFByPage(path string, page int) ([]byte, error) {
@@ -178,10 +207,19 @@ func InspectPDFByPageContext(ctx context.Context, path string, page int) ([]byte
 	if err != nil {
 		ocrPath, ocrErr := ocrPDF(ctx, path)
 		if ocrErr != nil {
+			if out, directErr := inspectDirectByPage(ctx, path, page); directErr == nil {
+				return out, nil
+			}
 			return nil, fmt.Errorf("classify failed (%v) and ocr fallback failed: %w", err, ocrErr)
 		}
 		defer os.Remove(ocrPath)
-		return inspectDirectByPage(ctx, ocrPath, page)
+		if out, directErr := inspectDirectByPage(ctx, ocrPath, page); directErr == nil {
+			return out, nil
+		} else if out2, fallbackErr := inspectDirectByPage(ctx, path, page); fallbackErr == nil {
+			return out2, nil
+		} else {
+			return nil, directErr
+		}
 	}
 
 	if isDocumentBased(class) {
@@ -190,10 +228,19 @@ func InspectPDFByPageContext(ctx context.Context, path string, page int) ([]byte
 
 	ocrPath, err := ocrPDF(ctx, path)
 	if err != nil {
+		if out, directErr := inspectDirectByPage(ctx, path, page); directErr == nil {
+			return out, nil
+		}
 		return nil, err
 	}
 	defer os.Remove(ocrPath)
-	return inspectDirectByPage(ctx, ocrPath, page)
+	if out, directErr := inspectDirectByPage(ctx, ocrPath, page); directErr == nil {
+		return out, nil
+	} else if out2, fallbackErr := inspectDirectByPage(ctx, path, page); fallbackErr == nil {
+		return out2, nil
+	} else {
+		return nil, directErr
+	}
 }
 
 func GetTotalPage(path string) (int, error) {
