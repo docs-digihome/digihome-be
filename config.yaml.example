@@ -16,9 +16,17 @@ database:
     sslmode: "disable"
 
 llm:
+  # api_key is shared fallback for chat & embed when per-service key is empty
+  # can be overridden via env LLM_API_KEY or per-service LLM_CHAT_API_KEY / LLM_EMBED_API_KEY
+  # api_key: ""
+  embed:
+    endpoint: "http://localhost:11434/api/embed"
+    model: "bge-m3"
+    api_key: "" # env LLM_EMBED_API_KEY — Bearer token for OpenAI-compatible endpoints (e.g. https://api.openai.com/v1/embeddings)
   chat:
     endpoint: "http://localhost:11434/api/chat"
     model: "qwen3.5:0.8b"
+    api_key: "" # env LLM_CHAT_API_KEY — Bearer token for OpenAI-compatible endpoints (e.g. https://api.openai.com/v1/chat/completions)
     num_ctx: 16384
     reserve_reply_tokens: 4096
     top_k_history: 10
