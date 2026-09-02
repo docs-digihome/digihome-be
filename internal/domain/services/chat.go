@@ -38,6 +38,7 @@ type (
 	chatConfig struct {
 		endpoint           string
 		model              string
+		apiKey             string
 		numCtx             int
 		reserveReplyTokens int
 		topKHistory        int
@@ -97,7 +98,7 @@ func (c *chatService) Chat(ctx context.Context, text string) (schema.ChatRespons
 	history := mergeHistory(recent, similar)
 	messages := buildMessages(cfg, history, docChunks, text)
 
-	reply, err := pkg.Chat(ctx, cfg.endpoint, cfg.model, messages, cfg.numCtx, cfg.maxTokens)
+	reply, err := pkg.ChatWithAPIKey(ctx, cfg.endpoint, cfg.model, cfg.apiKey, messages, cfg.numCtx, cfg.maxTokens)
 	if err != nil {
 		return schema.ChatResponse{}, err
 	}
@@ -198,12 +199,16 @@ func chatConfigFromViper() chatConfig {
 	cfg := chatConfig{
 		endpoint:           viper.GetString("llm.chat.endpoint"),
 		model:              viper.GetString("llm.chat.model"),
+		apiKey:             viper.GetString("llm.chat.api_key"),
 		numCtx:             viper.GetInt("llm.chat.num_ctx"),
 		reserveReplyTokens: viper.GetInt("llm.chat.reserve_reply_tokens"),
 		topKHistory:        viper.GetInt("llm.chat.top_k_history"),
 		recentMessages:     viper.GetInt("llm.chat.recent_messages"),
 		topKDocuments:      viper.GetInt("llm.chat.top_k_documents"),
 		maxTokens:          viper.GetInt("llm.chat.max_tokens"),
+	}
+	if cfg.apiKey == "" {
+		cfg.apiKey = viper.GetString("llm.api_key")
 	}
 
 	if cfg.endpoint == "" {
